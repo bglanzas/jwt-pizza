@@ -1,5 +1,21 @@
 import { test, expect } from 'playwright-test-coverage';
 
+const ADMIN_USER = {
+  id: 1,
+  name: '常用名字',
+  email: 'a@jwt.com',
+  password: 'admin',
+  roles: [{ role: 'admin' }],
+};
+
+const FRANCHISEE_USER = {
+  id: 2,
+  name: 'Franchise Owner',
+  email: 'owner@jwt.com',
+  password: 'owner',
+  roles: [{ role: 'franchisee' }],
+};
+
 test('login uses mocked auth response', async ({ page }) => {
   await page.route('**/api/auth', async (route) => {
     const request = route.request();
@@ -10,15 +26,15 @@ test('login uses mocked auth response', async ({ page }) => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        user: { id: 1, name: 'Test User', email: 'test@test.com', roles: [] },
+        user: { id: ADMIN_USER.id, name: ADMIN_USER.name, email: ADMIN_USER.email, roles: ADMIN_USER.roles },
         token: 'test-token',
       }),
     });
   });
 
   await page.goto('http://localhost:5173/login');
-  await page.getByPlaceholder('Email address').fill('test@test.com');
-  await page.getByPlaceholder('Password').fill('password123');
+  await page.getByPlaceholder('Email address').fill(ADMIN_USER.email);
+  await page.getByPlaceholder('Password').fill(ADMIN_USER.password);
   await page.getByRole('button', { name: 'Login' }).click();
 
   await expect(page.getByRole('link', { name: 'Logout' })).toBeVisible();
@@ -33,7 +49,7 @@ test('logout clears session and returns to home', async ({ page }) => {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ id: 1, name: 'Test User', email: 'test@test.com', roles: [] }),
+      body: JSON.stringify({ id: ADMIN_USER.id, name: ADMIN_USER.name, email: ADMIN_USER.email, roles: ADMIN_USER.roles }),
     });
   });
 
@@ -59,7 +75,7 @@ test('purchase flow uses mocked endpoints', async ({ page }) => {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ id: 1, name: 'Test User', email: 'test@test.com', roles: [] }),
+      body: JSON.stringify({ id: ADMIN_USER.id, name: ADMIN_USER.name, email: ADMIN_USER.email, roles: ADMIN_USER.roles }),
     });
   });
 
@@ -117,4 +133,69 @@ test('purchase flow uses mocked endpoints', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/delivery$/);
   await expect(page.getByText('order ID:')).toBeVisible();
+});
+
+test('franchisee can open and close a store (mocked)', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('token', 'test-token');
+  });
+
+  await page.route('**/api/user/me', async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: FRANCHISEE_USER.id,
+        name: FRANCHISEE_USER.name,
+        email: FRANCHISEE_USER.email,
+        roles: FRANCHISEE_USER.roles,
+      }),
+    });
+  });
+
+  let franchise = {
+    id: '10',
+    name: 'Owner Franchise',
+    admins: [{ name: FRANCHISEE_USER.name, email: FRANCHISEE_USER.email }],
+    stores: [{ id: '100', name: 'Main Store' }],
+  };
+
+  await page.route('**/api/franchise/**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([franchise]),
+      });
+    }
+    if (request.method() === 'POST') {
+      const newStore = { id: '101', name: 'New Store' };
+      franchise = { ...franchise, stores: [...franchise.stores, newStore] };
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(newStore),
+      });
+    }
+    if (request.method() === 'DELETE') {
+      franchise = { ...franchise, stores: [] };
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
+    }
+    return route.continue();
+  });
+
+  await page.goto('http://localhost:5173/franchise-dashboard');
+  await expect(page.getByText('Owner Franchise')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Create store' }).click();
+  await expect(page).toHaveURL(/\/franchise-dashboard\/create-store$/);
+  await page.getByPlaceholder('store name').fill('New Store');
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page).toHaveURL(/\/franchise-dashboard$/);
+
+  await page.getByRole('row', { name: /Main Store/ }).getByRole('button', { name: 'Close' }).click();
+  await expect(page).toHaveURL(/\/franchise-dashboard\/close-store$/);
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page).toHaveURL(/\/franchise-dashboard$/);
 });
