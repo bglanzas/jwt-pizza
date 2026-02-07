@@ -2,6 +2,8 @@
 
 ![Coverage badge](https://pizza-factory.cs329.click/api/badge/bglanzas/jwtpizzacoverage?t=1)
 
+[![CI Pipeline](https://github.com/bglanzas/jwt-pizza/actions/workflows/ci.yml/badge.svg)](https://github.com/bglanzas/jwt-pizza/actions/workflows/ci.yml)
+
 ![Coverage badge](https://pizza-factory.cs329.click/api/badge/bspears5/jwtpizzacoverage)
 
 
