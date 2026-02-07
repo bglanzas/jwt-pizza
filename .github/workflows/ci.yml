@@ -66,7 +66,7 @@ jobs:
       
       - name: Run tests
         run: |
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps webkit
           npm run test:coverage
 
       - name: Update coverage
