@@ -33,7 +33,7 @@ jobs:
       
       - name: Run tests
         run: |
-          npx playwright install --with-deps
+          npx playwright install --with-deps webkit
           npm run test:coverage
 
       - name: Update coverage
@@ -66,4 +66,3 @@ jobs:
         uses: actions/deploy-pages@v4
 
 
-        
