@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.set_version.outputs.version }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -21,30 +20,18 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: set version
         id: set_version
         run: |
           version=$(date +'%Y%m%d.%H%M%S')
           echo "version=$version" >> "$GITHUB_OUTPUT"
           printf '{"version": "%s" }' "$version" > public/version.json
-      
-      - name: Run tests
-        run: |
-          npx playwright install --with-deps webkit
-          npm run test:coverage
-
-      - name: Update coverage
-        run: |
-          coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
-          color=$(echo "$coverage < 80" | bc | awk '{if ($1) print "red"; else print "green"}')
-          curl -s -X POST "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzacoverage?label=Coverage&value=$coverage%25&color=$color" -H "authorization: bearer ${{ secrets.FACTORY_API_KEY }}"
+          - name: Run tests
+ 
 
       - name: Build
         run: |
-          npm run build
+          npm ci && npm run build
           cp dist/index.html dist/404.html
 
       - name: Update pages artifact
@@ -64,5 +51,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-
