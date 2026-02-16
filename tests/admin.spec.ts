@@ -26,7 +26,21 @@ async function mockAdminSession(page: any, initialUsers: MockUser[]) {
 
       if (url.includes('/api/user')) {
         if (method === 'GET') {
-          return new Response(JSON.stringify({ users, more: false }), { status: 200, headers: jsonHeaders });
+          const parsed = new URL(url, window.location.origin);
+          const pageParam = Number(parsed.searchParams.get('page') || '1');
+          const nameParam = parsed.searchParams.get('name') || '*';
+          let responseUsers = [...users];
+
+          if (nameParam.includes('Two')) {
+            responseUsers = responseUsers.filter((user) => user.name.includes('Two'));
+          }
+
+          if (pageParam === 2) {
+            responseUsers = [{ id: 12, name: 'Diner Three', email: 'diner3@jwt.com', roles: [{ role: 'diner' }] }];
+          }
+
+          const more = pageParam === 1;
+          return new Response(JSON.stringify({ users: responseUsers, more }), { status: 200, headers: jsonHeaders });
         }
         if (method === 'DELETE') {
           const userId = Number(url.split('/').pop());
@@ -37,7 +51,20 @@ async function mockAdminSession(page: any, initialUsers: MockUser[]) {
 
       if (url.includes('/api/franchise')) {
         if (method === 'GET') {
-          return new Response(JSON.stringify({ franchises: [], more: false }), { status: 200, headers: jsonHeaders });
+          return new Response(
+            JSON.stringify({
+              franchises: [
+                {
+                  id: 5,
+                  name: 'West Franchise',
+                  admins: [{ id: 1, name: 'Admin', email: 'admin@jwt.com' }],
+                  stores: [{ id: 9, name: 'SLC', totalRevenue: 12 }],
+                },
+              ],
+              more: false,
+            }),
+            { status: 200, headers: jsonHeaders }
+          );
         }
       }
 
@@ -60,8 +87,35 @@ test('admin can list and delete users (mocked)', async ({ page }) => {
   await expect(page.getByRole('main')).toContainText('Diner One');
   await expect(page.getByRole('main')).toContainText('Diner Two');
 
+  await page.getByPlaceholder('Filter users').fill('Two');
+  await page.getByRole('button', { name: 'Submit' }).first().click();
+  await expect(page.getByRole('main')).not.toContainText('Diner One');
+  await expect(page.getByRole('main')).toContainText('Diner Two');
+
+  await page.getByRole('button', { name: '»' }).first().click();
+  await expect(page.getByRole('main')).toContainText('Diner Three');
+
+  await page.getByRole('button', { name: '«' }).first().click();
+  await expect(page.getByRole('main')).toContainText('Diner Two');
+
+  await page.getByPlaceholder('Filter users').fill('');
+  await page.getByRole('button', { name: 'Submit' }).first().click();
+
   await page.getByRole('button', { name: 'Delete' }).first().click();
 
   await expect(page.getByRole('main')).not.toContainText('Diner One');
   await expect(page.getByRole('main')).toContainText('Diner Two');
+
+  await expect(page.getByRole('main')).toContainText('West Franchise');
+  await expect(page.getByRole('main')).toContainText('SLC');
+  await page.getByRole('button', { name: 'Close' }).first().click();
+  await expect(page).toHaveURL(/\/admin-dashboard\/close-franchise/);
+
+  await page.goto('http://localhost:5173/admin-dashboard');
+  await page.getByRole('button', { name: 'Close' }).nth(1).click();
+  await expect(page).toHaveURL(/\/admin-dashboard\/close-store/);
+
+  await page.goto('http://localhost:5173/admin-dashboard');
+  await page.getByRole('button', { name: 'Add Franchise' }).click();
+  await expect(page).toHaveURL(/\/admin-dashboard\/create-franchise/);
 });
