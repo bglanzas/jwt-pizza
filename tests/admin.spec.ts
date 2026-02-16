@@ -1,81 +1,67 @@
 import { test, expect } from 'playwright-test-coverage';
 
-const ADMIN_USER = {
-  id: 1,
-  name: '常用名字',
-  email: 'a@jwt.com',
-  roles: [{ role: 'admin' }],
+type MockUser = {
+  id: number;
+  name: string;
+  email: string;
+  roles: { role: string; objectId?: string }[];
 };
 
-test('admin can open and close a franchise (mocked)', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('token', 'test-token');
-  });
+async function mockAdminSession(page: any, initialUsers: MockUser[]) {
+  await page.addInitScript((seedUsers: MockUser[]) => {
+    localStorage.setItem('token', 'admin-token');
 
-  await page.route('**/api/user/me', async (route) => {
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: ADMIN_USER.id,
-        name: ADMIN_USER.name,
-        email: ADMIN_USER.email,
-        roles: ADMIN_USER.roles,
-      }),
-    });
-  });
+    let users = [...seedUsers];
+    const adminUser = { id: 1, name: 'Admin', email: 'admin@jwt.com', roles: [{ role: 'admin' }] };
+    const jsonHeaders = { 'Content-Type': 'application/json' };
+    const originalFetch = window.fetch.bind(window);
 
-  let franchises = [
-    {
-      id: '1',
-      name: 'Test Franchise',
-      admins: [{ name: ADMIN_USER.name, email: ADMIN_USER.email }],
-      stores: [],
-    },
-  ];
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
 
-  await page.route('**/api/franchise**', async (route) => {
-    const request = route.request();
-    if (request.method() === 'GET') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ franchises, more: false }),
-      });
-    }
-    if (request.method() === 'POST') {
-      const newFranchise = {
-        id: '2',
-        name: 'New Franchise',
-        admins: [{ name: ADMIN_USER.name, email: ADMIN_USER.email }],
-        stores: [],
-      };
-      franchises = [newFranchise, ...franchises];
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(newFranchise),
-      });
-    }
-    if (request.method() === 'DELETE') {
-      franchises = franchises.filter((f) => f.id !== '2');
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'ok' }) });
-    }
-    return route.continue();
-  });
+      if (url.includes('/api/user/me')) {
+        return new Response(JSON.stringify(adminUser), { status: 200, headers: jsonHeaders });
+      }
+
+      if (url.includes('/api/user')) {
+        if (method === 'GET') {
+          return new Response(JSON.stringify({ users, more: false }), { status: 200, headers: jsonHeaders });
+        }
+        if (method === 'DELETE') {
+          const userId = Number(url.split('/').pop());
+          users = users.filter((user) => user.id !== userId);
+          return new Response(JSON.stringify({ message: 'deleted' }), { status: 200, headers: jsonHeaders });
+        }
+      }
+
+      if (url.includes('/api/franchise')) {
+        if (method === 'GET') {
+          return new Response(JSON.stringify({ franchises: [], more: false }), { status: 200, headers: jsonHeaders });
+        }
+      }
+
+      if (method === 'OPTIONS') {
+        return new Response(null, { status: 204 });
+      }
+
+      return originalFetch(input, init);
+    };
+  }, initialUsers);
+}
+
+test('admin can list and delete users (mocked)', async ({ page }) => {
+  await mockAdminSession(page, [
+    { id: 10, name: 'Diner One', email: 'diner1@jwt.com', roles: [{ role: 'diner' }] },
+    { id: 11, name: 'Diner Two', email: 'diner2@jwt.com', roles: [{ role: 'diner' }] },
+  ]);
 
   await page.goto('http://localhost:5173/admin-dashboard');
-  await expect(page.getByText('Franchises')).toBeVisible();
+  await expect(page.getByRole('main')).toContainText('Diner One');
+  await expect(page.getByRole('main')).toContainText('Diner Two');
 
-  await page.getByRole('button', { name: 'Add Franchise' }).click();
-  await expect(page).toHaveURL(/\/admin-dashboard\/create-franchise$/);
-  await page.getByPlaceholder('franchise name').fill('New Franchise');
-  await page.getByPlaceholder('franchisee admin email').fill(ADMIN_USER.email);
-  await page.getByRole('button', { name: 'Create' }).click();
-  await expect(page).toHaveURL(/\/admin-dashboard$/);
+  await page.getByRole('button', { name: 'Delete' }).first().click();
 
-  await page.getByRole('row', { name: /New Franchise/ }).getByRole('button', { name: 'Close' }).click();
-  await expect(page).toHaveURL(/\/admin-dashboard\/close-franchise$/);
-  await page.getByRole('button', { name: 'Close' }).click();
-  await expect(page).toHaveURL(/\/admin-dashboard$/);
+  await expect(page.getByRole('main')).not.toContainText('Diner One');
+  await expect(page.getByRole('main')).toContainText('Diner Two');
 });
