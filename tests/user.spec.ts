@@ -21,6 +21,9 @@ async function mockUserSession(page: any, initialUser: MockUser) {
 
   await page.route('**/api/user/**', async (route: any) => {
     const request = route.request();
+    if (request.method() === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+    }
     if (request.method() !== 'PUT') {
       return route.continue();
     }
@@ -35,6 +38,9 @@ async function mockUserSession(page: any, initialUser: MockUser) {
 
   await page.route('**/api/order', async (route: any) => {
     const request = route.request();
+    if (request.method() === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+    }
     if (request.method() !== 'GET') {
       return route.continue();
     }
@@ -47,6 +53,9 @@ async function mockUserSession(page: any, initialUser: MockUser) {
 
   await page.route('**/api/auth', async (route: any) => {
     const request = route.request();
+    if (request.method() === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } });
+    }
     if (request.method() === 'PUT') {
       const body = request.postDataJSON();
       if (body.email !== user.email || body.password !== user.password) {
@@ -74,7 +83,9 @@ test('updateUser', async ({ page }) => {
     roles: [{ role: 'diner' }],
   });
 
+  const userMeResponse = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponse;
 
   await expect(page.getByRole('main')).toContainText('pizza diner');
   await page.getByRole('button', { name: 'Edit' }).click();
@@ -105,7 +116,9 @@ test('updateUser updates email and password and persists after login (mocked)', 
     roles: [{ role: 'diner' }],
   });
 
+  const userMeResponse = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponse;
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
@@ -124,7 +137,9 @@ test('updateUser updates email and password and persists after login (mocked)', 
   await page.getByRole('button', { name: 'Login' }).click();
 
   await expect(page.getByRole('link', { name: 'Logout' })).toBeVisible();
+  const userMeResponseAfterLogin = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponseAfterLogin;
   await expect(page.getByRole('main')).toContainText('pizza.diner+new@jwt.com');
 });
 
@@ -137,7 +152,9 @@ test('updateUser updates email only and persists after login (mocked)', async ({
     roles: [{ role: 'diner' }],
   });
 
+  const userMeResponse = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponse;
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
   await page.getByRole('textbox').nth(1).fill('pizza.diner+email@jwt.com');
@@ -165,7 +182,9 @@ test('updateUser updates password only and persists after login (mocked)', async
     roles: [{ role: 'diner' }],
   });
 
+  const userMeResponse = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponse;
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
   await page.getByRole('textbox').nth(2).fill('newdinerpass');
@@ -218,7 +237,9 @@ test('updateUser keeps admin role when updating profile (mocked)', async ({ page
     roles: [{ role: 'admin' }],
   });
 
+  const userMeResponse = page.waitForResponse('**/api/user/me');
   await page.goto('http://localhost:5173/diner-dashboard');
+  await userMeResponse;
   await expect(page.getByRole('main')).toContainText('admin');
 
   await page.getByRole('button', { name: 'Edit' }).click();
